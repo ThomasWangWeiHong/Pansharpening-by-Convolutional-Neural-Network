@@ -114,18 +114,18 @@ def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, 
 def training_data_generation(DATA_DIR, img_height_size, img_width_size):
     """ 
     This function is used to read in files from a folder which contains the images which are to be used for training the 
-    SRCNN model, then returns 2 numpy arrays containing the training and target data for all the images in the folder so that
-    they can be used for SRCNN model training.
+    PCNN model, then returns 2 numpy arrays containing the training and target data for all the images in the folder so that
+    they can be used for PCNN model training.
     
     Inputs:
-    - DATA_DIR: File path of the folder containing the images to be used as training data for SRCNN model. Images can be
-                changed to other formats (default image format is .tif)
-    - img_height_size: Height of image segment to be used for SRCNN model training
-    - img_width_size: Width of image segment to be used for SRCNN model training
+    - DATA_DIR: File path of the folder containing the images to be used as training data for PCNN model.
+    - img_height_size: Height of image segment to be used for PCNN model training
+    - img_width_size: Width of image segment to be used for PCNN model training
     
     Outputs:
-    - blurred_full_array: 4 - Dimensional numpy array of Gaussian blurred images to serve as training data for SRCNN model
-    - img_full_array: 4 - Dimensional numpy array of original input image to serve as target data for training SRCNN model
+    - train_full_array: 4 - Dimensional numpy array of concatenated multispectral and downsampled panchromatic images to serve as 
+                            training data for PCNN model
+    - img_full_array: 4 - Dimensional numpy array of original input multispectral image to serve as target data for training PCNN model
     
     """
     
