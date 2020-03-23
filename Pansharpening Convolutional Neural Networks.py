@@ -35,8 +35,8 @@ def training_image_creation(img_ms, img_pan, n_factor):
                                       interpolation = cv2.INTER_AREA)
     blurred_img_ms_sam = cv2.resize(blurred_img_ms_small, (img_ms.shape[1], img_ms.shape[0]), interpolation = cv2.INTER_CUBIC)
     
-    downsampled_img_pan = cv2.resize(img_pan, (img_ms.shape[1], img_ms.shape[0]), interpolation = cv2.INTER_AREA)
-    downsampled_img_pan = np.expand_dims(downsampled_img_pan, axis = 2)
+    downsampled_img_pan = cv2.resize(img_pan, (img_ms.shape[1], img_ms.shape[0]), 
+                                     interpolation = cv2.INTER_AREA)[:, :, np.newaxis]
     
     training_sample_array = np.concatenate((blurred_img_ms_sam, downsampled_img_pan), axis = 2)
     
@@ -44,7 +44,8 @@ def training_image_creation(img_ms, img_pan, n_factor):
 
 
 
-def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, image_width_size, mode):
+def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, image_width_size, percentage_overlap, 
+                          buffer):
     """ 
     This function is used to cut up original input images of any size into segments of a fixed size, with empty clipped areas 
     padded with zeros to ensure that segments are of equal fixed sizes and contain valid data values. The function then 
@@ -56,7 +57,9 @@ def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, 
     - train_image_array: Numpy array of training sample images to be used for PCNN model training
     - image_height_size: Height of image to be fed into the PCNN model for training
     - image_width_size: Width of image to be fed into the PCNN model for training
-    - mode: Integer representing the status of height and width of input image which is defined under 'image_array'
+    - percentage_overlap: Percentage of overlap between image patches extracted by sliding window to be used for model 
+                          training
+    - buffer: Percentage allowance for image patch to be populated by reflected values for positions with no valid data values
     
     Output:
     - train_segment_array: 4 - Dimensional numpy array of training sample images to serve as training data for PCNN model
@@ -66,39 +69,25 @@ def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, 
     """
     
     y_size = ((image_ms_array.shape[0] // image_height_size) + 1) * image_height_size
+    y_pad = int(y_size - image_ms_array.shape[0])
     x_size = ((image_ms_array.shape[1] // image_width_size) + 1) * image_width_size
+    x_pad = int(x_size - image_ms_array.shape[1])
     
-    if mode == 0:
-        img_complete = np.zeros((y_size, image_ms_array.shape[1], image_ms_array.shape[2]))
-        train_complete = np.zeros((y_size, train_image_array.shape[1], train_image_array.shape[2]))
-        img_complete[0 : image_ms_array.shape[0], 0 : image_ms_array.shape[1], 0 : image_ms_array.shape[2]] = image_ms_array
-        train_complete[0 : train_image_array.shape[0], 0 : train_image_array.shape[1], 
-                         0 : train_image_array.shape[2]] = train_image_array
-    elif mode == 1:
-        img_complete = np.zeros((image_ms_array.shape[0], x_size, image_ms_array.shape[2]))
-        train_complete = np.zeros((train_image_array.shape[0], x_size, train_image_array.shape[2]))
-        img_complete[0 : image_ms_array.shape[0], 0 : image_ms_array.shape[1], 0 : image_ms_array.shape[2]] = image_ms_array
-        train_complete[0 : train_image_array.shape[0], 0 : train_image_array.shape[1], 
-                         0 : train_image_array.shape[2]] = train_image_array
-    elif mode == 2:
-        img_complete = np.zeros((y_size, x_size, image_ms_array.shape[2]))
-        train_complete = np.zeros((y_size, x_size, train_image_array.shape[2]))
-        img_complete[0 : image_ms_array.shape[0], 0 : image_ms_array.shape[1], 0 : image_ms_array.shape[2]] = image_ms_array
-        train_complete[0 : train_image_array.shape[0], 0 : train_image_array.shape[1], 
-                       0 : train_image_array.shape[2]] = train_image_array
-    elif mode == 3:
-        img_complete = image_ms_array
-        train_complete = train_image_array
+    img_complete = np.pad(image_ms_array, ((0, y_pad), (0, x_pad), (0, 0)), mode = 'symmetric').astype(image_ms_array.dtype)
+    train_complete = np.pad(train_image_array, ((0, y_pad), (0, x_pad), (0, 0)), 
+                            mode = 'symmetric').astype(train_image_array.dtype)
         
     img_list = []
     train_list = []
     
-    for i in range(0, image_ms_array.shape[0], image_height_size):
-        for j in range(0, image_ms_array.shape[1], image_width_size):
-            img_orig = img_complete[i : i + image_height_size, j : j + image_width_size, 0 : image_ms_array.shape[2]]
-            img_list.append(img_orig)
-            train_list.append(train_complete[i : i + image_height_size, j : j + image_width_size, 
-                                             0 : train_image_array.shape[2]])
+    for i in range(0, int(img_complete.shape[0] - (2 - buffer) * image_height_size), 
+                   int((1 - percentage_overlap) * image_height_size)):
+        for j in range(0, int(img_complete.shape[1] - (2 - buffer) * image_width_size), 
+                       int((1 - percentage_overlap) * image_width_size)):
+            img_original = img_complete[i : i + image_height_size, j : j + image_width_size, 0 : image_ms_array.shape[2]]
+            img_list.append(img_original)
+            train_original = train_complete[i : i + image_height_size, j : j + image_width_size, :]
+            train_list.append(train_original)
     
     image_segment_array = np.zeros((len(img_list), image_height_size, image_width_size, image_ms_array.shape[2]))
     train_segment_array = np.zeros((len(train_list), image_height_size, image_width_size, train_image_array.shape[2]))
@@ -111,7 +100,7 @@ def image_clip_to_segment(image_ms_array, train_image_array, image_height_size, 
 
 
 
-def training_data_generation(DATA_DIR, img_height_size, img_width_size):
+def training_data_generation(DATA_DIR, img_height_size, img_width_size, perc, buff):
     """ 
     This function is used to read in files from a folder which contains the images which are to be used for training the 
     PCNN model, then returns 2 numpy arrays containing the training and target data for all the images in the folder so that
@@ -121,6 +110,8 @@ def training_data_generation(DATA_DIR, img_height_size, img_width_size):
     - DATA_DIR: File path of the folder containing the images to be used as training data for PCNN model.
     - img_height_size: Height of image segment to be used for PCNN model training
     - img_width_size: Width of image segment to be used for PCNN model training
+    - perc: Percentage of overlap between image patches extracted by sliding window to be used for model training
+    - buff: Percentage allowance for image patch to be populated by reflected values for positions with no valid data values
     
     Outputs:
     - train_full_array: 4 - Dimensional numpy array of concatenated multispectral and downsampled panchromatic images to serve as 
@@ -128,6 +119,12 @@ def training_data_generation(DATA_DIR, img_height_size, img_width_size):
     - img_full_array: 4 - Dimensional numpy array of original input multispectral image to serve as target data for training PCNN model
     
     """
+    
+    if perc < 0 or perc > 1:
+        raise ValueError('Please input a number between 0 and 1 (inclusive) for perc.')
+        
+    if buff < 0 or buff > 1:
+        raise ValueError('Please input a number between 0 and 1 (inclusive) for buff.')
     
     img_MS_files = glob.glob(DATA_DIR + '\\Train_MS' + '\\Train_*.tif')
     img_PAN_files = glob.glob(DATA_DIR + '\\Train_PAN' + '\\Train_*.tif')
@@ -148,17 +145,8 @@ def training_data_generation(DATA_DIR, img_height_size, img_width_size):
             
         train_img = training_image_creation(ms_img, pan_img, n_factor = ms_to_pan_ratio)
     
-        if (ms_img.shape[0] % img_height_size != 0) and (ms_img.shape[1] % img_width_size == 0):
-            train_array, img_array = image_clip_to_segment(ms_img, train_img, img_height_size, img_width_size, mode = 0)
-            
-        elif (ms_img.shape[0] % img_height_size == 0) and (ms_img.shape[1] % img_width_size != 0):
-            train_array, img_array = image_clip_to_segment(ms_img, train_img, img_height_size, img_width_size, mode = 1)
-            
-        elif (ms_img.shape[0] % img_height_size != 0) and (ms_img.shape[1] % img_width_size != 0):
-            train_array, img_array = image_clip_to_segment(ms_img, train_img, img_height_size, img_width_size, mode = 2)
-            
-        else:
-            train_array, img_array = image_clip_to_segment(ms_img, train_img, img_height_size, img_width_size, mode = 3)
+        train_array, img_array = image_clip_to_segment(ms_img, train_img, img_height_size, img_width_size, 
+                                                       percentage_overlap = perc, buffer = buff)
         
         img_array_list.append(img_array)
         train_array_list.append(train_array)
@@ -207,8 +195,9 @@ def pcnn_model(image_height_size, image_width_size, n_bands, n1 = 64, n2 = 32, f
 
 
 
-def image_model_predict(input_ms_image_filename, input_pan_image_filename, img_height_size, img_width_size, fitted_model, 
-                        write, output_filename):
+def image_model_predict(input_ms_image_filename, input_pan_image_filename, output_filename, 
+                        img_height_size, img_width_size, fitted_model, 
+                        percentage_overlap, write):
     """ 
     This function cuts up an image into segments of fixed size, and feeds each segment to the model for upsampling. The 
     output upsampled segment is then allocated to its corresponding location in the image in order to obtain the complete upsampled 
@@ -217,15 +206,17 @@ def image_model_predict(input_ms_image_filename, input_pan_image_filename, img_h
     Inputs:
     - input_ms_image_filename: File path of the multispectral image to be pansharpened by the PCNN model
     - input_pan_image_filename: File path of the panchromatic image to be used by the PCNN model
+    - output_filename: File path to write the file
     - img_height_size: Height of image segment to be used for PCNN model pansharpening
     - img_width_size: Width of image segment to be used for PCNN model pansharpening
     - ms_to_pan_ratio: The ratio of pixel resolution of multispectral image to that of panchromatic image
     - fitted_model: Keras model containing the trained PCNN model along with its trained weights
+    - percentage_overlap: Percentage of overlap between adjacent patches of image for model prediction
     - write: Boolean indicating whether to write the pansharpened image to file
-    - output_filename: File path to write the file
+    
     
     Output:
-    - pred_img_actual: Numpy array which represents the pansharpened image
+    - pred_img_final: Numpy array which represents the pansharpened image
     
     """
     
@@ -235,54 +226,40 @@ def image_model_predict(input_ms_image_filename, input_pan_image_filename, img_h
     
     with rasterio.open(input_pan_image_filename) as g:
         metadata_pan = g.profile
-        pan_img = g.read(1)
-    
-    pan_img = np.expand_dims(pan_img, axis = 2)
+        pan_img = np.expand_dims(g.read(1), axis = 2)
     
     ms_to_pan_ratio = metadata['transform'][0] / metadata_pan['transform'][0]
-    
     ms_img_upsampled = cv2.resize(ms_img, (int(ms_img.shape[1] * ms_to_pan_ratio), int(ms_img.shape[0] * ms_to_pan_ratio)), 
                                   interpolation = cv2.INTER_CUBIC)
-        
     pred_stack = np.concatenate((ms_img_upsampled, pan_img), axis = 2)
     
-    y_size = ((pred_stack.shape[0] // img_height_size) + 1) * img_height_size
-    x_size = ((pred_stack.shape[1] // img_width_size) + 1) * img_width_size
     
-    if (pred_stack.shape[0] % img_height_size != 0) and (pred_stack.shape[1] % img_width_size == 0):
-        img_complete = np.zeros((y_size, pred_stack.shape[1], pred_stack.shape[2]))
-        img_complete[0 : pred_stack.shape[0], 0 : pred_stack.shape[1], 0 : pred_stack.shape[2]] = pred_stack
-    elif (pred_stack.shape[0] % img_height_size == 0) and (pred_stack.shape[1] % img_width_size != 0):
-        img_complete = np.zeros((pred_stack.shape[0], x_size, pred_stack.shape[2]))
-        img_complete[0 : pred_stack.shape[0], 0 : pred_stack.shape[1], 0 : pred_stack.shape[2]] = pred_stack
-    elif (pred_stack.shape[0] % img_height_size != 0) and (pred_stack.shape[1] % img_width_size != 0):
-        img_complete = np.zeros((y_size, x_size, pred_stack.shape[2]))
-        img_complete[0 : pred_stack.shape[0], 0 : pred_stack.shape[1], 0 : pred_stack.shape[2]] = pred_stack
-    else:
-         img_complete = pred_stack
+    y_size = ((pred_stack.shape[0] // img_height_size) + 1) * img_height_size
+    y_pad = int(y_size - pred_stack.shape[0])
+    x_size = ((pred_stack.shape[1] // img_width_size) + 1) * img_width_size
+    x_pad = int(x_size - pred_stack.shape[1])
+    
+    img_complete = np.pad(pred_stack, ((0, y_pad), (0, x_pad), (0, 0)), mode = 'symmetric').astype(pred_stack.dtype)
     
     pred_img = np.zeros((img_complete.shape[0], img_complete.shape[1], ms_img.shape[2]))
-    
+    weight_mask = np.zeros((img_complete.shape[0], img_complete.shape[1], 1))
     img_holder = np.zeros((1, img_height_size, img_width_size, img_complete.shape[2]))
-    preds_list = []
+
     
-    for i in range(0, img_complete.shape[0], img_height_size):
-        for j in range(0, img_complete.shape[1], img_width_size):
-            img_holder[0] = img_complete[i : i + img_height_size, j : j + img_width_size, 0 : img_complete.shape[2]]
+    for i in range(0, img_complete.shape[0] - img_height_size + 1, int((1 - percentage_overlap) * img_height_size)):
+        for j in range(0, img_complete.shape[1] - img_width_size + 1, int((1 - percentage_overlap) * img_width_size)):
+            img_holder[0] = img_complete[i : (i + img_height_size), j : (j + img_width_size), 0 : pred_stack.shape[2]]
             preds = fitted_model.predict(img_holder)
-            preds_list.append(preds)
-    
-    n = 0 
-    for i in range(0, pred_img.shape[0], img_height_size):
-            for j in range(0, pred_img.shape[1], img_width_size):
-                pred_img[i : i + img_height_size, j : j + img_width_size, 0 : ms_img.shape[2]] = preds_list[n]
-                n += 1
-                
-    pred_img_actual = np.transpose(pred_img[0 : pred_stack.shape[0], 0 : pred_stack.shape[1], 0 : ms_img.shape[2]], 
-                                   [2, 0, 1]).astype(metadata_pan['dtype'])
+            pred_img[i : i + img_height_size, j : j + img_width_size, :] += preds[0, :, :, :]
+            weight_mask[i : i + img_height_size, j : j + img_width_size, 0] += 1
+
+    pred_img_complete = pred_img[0 : pan_img.shape[0], 0 : pan_img.shape[1], :]
+    weight_mask_complete = weight_mask[0 : pan_img.shape[0], 0 : pan_img.shape[1], 0][:, :, np.newaxis]
+    pred_img_final = (pred_img_complete / weight_mask_complete).astype(metadata['dtype'])
+
     
     metadata_pan['count'] = ms_img_upsampled.shape[2]
     with rasterio.open(output_filename, 'w', **metadata_pan) as dst:
-        dst.write(pred_img_actual)
+        dst.write(np.transpose(pred_img_final, [2, 0, 1]))
     
-    return pred_img_actual
+    return pred_img_final
