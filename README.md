@@ -17,3 +17,30 @@ Requirements:
 - numpy
 - rasterio
 - keras (TensorFlow backend)
+
+
+The following images illustrates the PCNN model in action on a sample GeoEye - 1 image (courtesy of European Space Agency), which is not one of the sensors included in the training dataset for the PCNN model. It serves to test the generalizability of the PCNN model on sensors on which the model has not been trained on before. Do note that the default parameters are used to train this particular PCNN model, and that some improvements might be expected if fine - tuning of the parameters are conducted.
+
+
+Test Area GeoEye - 1 Multispectral Image (Courtesy of European Space Agency):
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Area.JPG)
+
+
+Test Area GeoEye - 1 Panchromatic Image (Courtesy of European Space Agency):
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Area_Pan.JPG)
+
+
+Test Area Pansharpened Image:
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Area_PSH.JPG)
+
+
+Zoomed In Section of Multispectral Image:
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Enlarged.JPG)
+
+
+Zoomed In Section of Panchromatic Image:
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Enlarged_Pan.JPG)
+
+
+Zoomed In Section of Pansharpened Image:
+![Alt Text](https://github.com/ThomasWangWeiHong/Pansharpening-by-Convolutional-Neural-Network/blob/master/Test_Enlarged_PSH.JPG)
